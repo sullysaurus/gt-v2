@@ -87,82 +87,189 @@ import bpy
 import math
 import bmesh
 
-def create_material(name, color, roughness=0.5):
+# Materials cache to avoid recreation
+materials_cache = {{}}
+
+def create_material(name, color, roughness=0.5, metallic=0.0):
     """Create a simple material with the given color."""
+    if name in materials_cache:
+        return materials_cache[name]
     mat = bpy.data.materials.new(name=name)
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes["Principled BSDF"]
     bsdf.inputs["Base Color"].default_value = (*color, 1.0)
     bsdf.inputs["Roughness"].default_value = roughness
+    bsdf.inputs["Metallic"].default_value = metallic
+    materials_cache[name] = mat
     return mat
 
 def create_baseball_field():
-    """Create a baseball diamond with grass, dirt, and bases."""
-    # Grass outfield (large circle)
-    bpy.ops.mesh.primitive_circle_add(radius=95, vertices=64, fill_type='NGON', location=(0, 10, 0))
-    outfield = bpy.context.active_object
-    outfield.name = "Outfield"
-    outfield.data.materials.append(create_material("Grass", (0.15, 0.45, 0.12), 0.8))
+    """Create a detailed baseball diamond with grass, dirt, bases, and markings."""
+    # Main grass field (pie-wedge shape for baseball)
+    bpy.ops.mesh.primitive_circle_add(radius=120, vertices=64, fill_type='NGON', location=(0, 0, 0))
+    field = bpy.context.active_object
+    field.name = "Field_Grass"
+    field.data.materials.append(create_material("Grass", (0.18, 0.42, 0.15), 0.85))
 
-    # Infield dirt (diamond shape)
-    bpy.ops.mesh.primitive_plane_add(size=40, location=(0, -15, 0.01))
+    # Infield grass (inner circle)
+    bpy.ops.mesh.primitive_circle_add(radius=29, vertices=48, fill_type='NGON', location=(0, 0, 0.005))
+    infield_grass = bpy.context.active_object
+    infield_grass.name = "Infield_Grass"
+    infield_grass.data.materials.append(create_material("Grass_Infield", (0.2, 0.45, 0.17), 0.85))
+
+    # Infield dirt (full diamond)
+    bpy.ops.mesh.primitive_plane_add(size=38, location=(0, 0, 0.01))
     infield = bpy.context.active_object
     infield.rotation_euler = (0, 0, math.radians(45))
-    infield.name = "Infield"
-    infield.data.materials.append(create_material("Dirt", (0.6, 0.4, 0.25), 0.9))
+    infield.name = "Infield_Dirt"
+    infield.data.materials.append(create_material("Dirt", (0.55, 0.38, 0.22), 0.9))
+
+    # Home plate area (larger dirt circle)
+    bpy.ops.mesh.primitive_circle_add(radius=8, vertices=32, fill_type='NGON', location=(0, -27, 0.015))
+    home_dirt = bpy.context.active_object
+    home_dirt.name = "Home_Dirt"
+    home_dirt.data.materials.append(create_material("Dirt", (0.55, 0.38, 0.22), 0.9))
 
     # Pitcher's mound
-    bpy.ops.mesh.primitive_cylinder_add(radius=3, depth=0.5, location=(0, -15, 0.25))
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=2.5, segments=16, ring_count=8, location=(0, 0, 0.3))
     mound = bpy.context.active_object
-    mound.name = "PitcherMound"
-    mound.data.materials.append(create_material("Dirt", (0.55, 0.38, 0.22), 0.9))
+    mound.scale = (1, 1, 0.15)
+    mound.name = "Pitchers_Mound"
+    mound.data.materials.append(create_material("Dirt_Mound", (0.52, 0.36, 0.2), 0.9))
 
-    # Home plate area
-    bpy.ops.mesh.primitive_circle_add(radius=6, vertices=32, fill_type='NGON', location=(0, -38, 0.01))
-    home_area = bpy.context.active_object
-    home_area.name = "HomeArea"
-    home_area.data.materials.append(create_material("Dirt", (0.6, 0.4, 0.25), 0.9))
+    # Pitcher's rubber
+    bpy.ops.mesh.primitive_cube_add(size=0.6, location=(0, 0, 0.35))
+    rubber = bpy.context.active_object
+    rubber.scale = (1, 0.15, 0.05)
+    rubber.name = "Pitchers_Rubber"
+    rubber.data.materials.append(create_material("White", (0.95, 0.95, 0.95), 0.4))
 
-    # Bases (white squares)
-    base_positions = [(20, 5, 0.1), (-20, 5, 0.1), (0, 28, 0.1), (0, -38, 0.1)]  # 1B, 3B, 2B, Home
-    for i, pos in enumerate(base_positions):
-        bpy.ops.mesh.primitive_plane_add(size=1.2, location=pos)
+    # Bases - proper baseball diamond layout
+    # Home plate at (0, -27), 1B at (19, -8), 2B at (0, 11), 3B at (-19, -8)
+    base_positions = [
+        (19, -8, 0.05, "First_Base"),
+        (-19, -8, 0.05, "Third_Base"),
+        (0, 11, 0.05, "Second_Base"),
+    ]
+    for x, y, z, name in base_positions:
+        bpy.ops.mesh.primitive_plane_add(size=0.38, location=(x, y, z))
         base = bpy.context.active_object
         base.rotation_euler = (0, 0, math.radians(45))
-        base.name = f"Base_{{i+1}}"
-        base.data.materials.append(create_material("White", (0.95, 0.95, 0.95), 0.3))
+        base.name = name
+        base.data.materials.append(create_material("White", (0.98, 0.98, 0.98), 0.3))
 
-    # Foul lines (white lines)
+    # Home plate (pentagon shape)
+    verts = [(0.22, 0, 0.05), (0.22, -0.22, 0.05), (0, -0.35, 0.05),
+             (-0.22, -0.22, 0.05), (-0.22, 0, 0.05)]
+    faces = [(0, 1, 2, 3, 4)]
+    mesh = bpy.data.meshes.new("HomePlate")
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    home_plate = bpy.data.objects.new("Home_Plate", mesh)
+    home_plate.location = (0, -27, 0)
+    bpy.context.collection.objects.link(home_plate)
+    home_plate.data.materials.append(create_material("White", (0.98, 0.98, 0.98), 0.3))
+
+    # Batter's boxes
+    for x_offset in [-1.2, 1.2]:
+        bpy.ops.mesh.primitive_plane_add(size=1, location=(x_offset, -27, 0.02))
+        box = bpy.context.active_object
+        box.scale = (0.6, 0.9, 1)
+        box.name = f"Batters_Box"
+        box.data.materials.append(create_material("Dirt_Light", (0.6, 0.45, 0.28), 0.9))
+
+    # Foul lines
+    line_mat = create_material("Chalk", (0.98, 0.98, 0.98), 0.7)
     for angle in [45, 135]:
-        bpy.ops.mesh.primitive_plane_add(size=1, location=(0, -38, 0.02))
+        bpy.ops.mesh.primitive_plane_add(size=1, location=(0, -27, 0.02))
         line = bpy.context.active_object
-        line.scale = (0.15, 60, 1)
+        line.scale = (0.05, 75, 1)
         line.rotation_euler = (0, 0, math.radians(angle))
-        line.location = (math.cos(math.radians(angle-90)) * 30, -38 + math.sin(math.radians(angle-90)) * 30, 0.02)
-        line.name = f"FoulLine_{{angle}}"
-        line.data.materials.append(create_material("White", (0.95, 0.95, 0.95), 0.3))
+        offset_x = 52 * math.cos(math.radians(angle - 90))
+        offset_y = 52 * math.sin(math.radians(angle - 90))
+        line.location = (offset_x, -27 + offset_y, 0.02)
+        line.name = f"Foul_Line_{{angle}}"
+        line.data.materials.append(line_mat)
 
-def create_seating_section(inner_radius, outer_radius, start_angle, end_angle, elevation, rows=8, name="Section"):
-    """Create a seating section with actual rows of seats."""
-    # Create the section as a curved surface
-    angle_range = end_angle - start_angle
-    segments = max(8, int(abs(angle_range) / 5))
+    # Warning track (darker dirt ring in outfield)
+    bpy.ops.mesh.primitive_circle_add(radius=115, vertices=64, fill_type='NGON', location=(0, 0, 0.008))
+    warning_outer = bpy.context.active_object
+    warning_outer.name = "Warning_Track"
+    warning_outer.data.materials.append(create_material("Warning_Track", (0.5, 0.35, 0.2), 0.9))
+
+    # Cut out inner grass from warning track
+    bpy.ops.mesh.primitive_circle_add(radius=108, vertices=64, fill_type='NGON', location=(0, 0, 0.009))
+    grass_inner = bpy.context.active_object
+    grass_inner.name = "Outfield_Grass"
+    grass_inner.data.materials.append(create_material("Grass", (0.18, 0.42, 0.15), 0.85))
+
+def create_outfield_wall():
+    """Create the outfield wall with padding."""
+    wall_mat = create_material("Wall_Blue", (0.1, 0.2, 0.4), 0.7)
+    padding_mat = create_material("Wall_Padding", (0.15, 0.25, 0.45), 0.85)
+
+    # Create curved outfield wall
+    segments = 48
+    wall_height = 2.5
+    wall_radius = 115
 
     verts = []
     faces = []
 
-    row_depth = (outer_radius - inner_radius) / rows
+    # Only create wall from left field to right field (arc from -45 to 225 degrees)
+    for i in range(segments + 1):
+        angle = math.radians(-45 + (270 * i / segments))
+        x = wall_radius * math.cos(angle)
+        y = wall_radius * math.sin(angle)
+        verts.append((x, y, 0))
+        verts.append((x, y, wall_height))
+
+    for i in range(segments):
+        v1 = i * 2
+        v2 = v1 + 1
+        v3 = v1 + 3
+        v4 = v1 + 2
+        faces.append((v1, v2, v3, v4))
+
+    mesh = bpy.data.meshes.new("Outfield_Wall")
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    wall = bpy.data.objects.new("Outfield_Wall", mesh)
+    bpy.context.collection.objects.link(wall)
+    wall.data.materials.append(wall_mat)
+
+    # Wall top (yellow line)
+    bpy.ops.mesh.primitive_torus_add(
+        major_radius=wall_radius, minor_radius=0.15,
+        major_segments=48, minor_segments=8,
+        location=(0, 0, wall_height)
+    )
+    wall_top = bpy.context.active_object
+    wall_top.name = "Wall_Top"
+    wall_top.data.materials.append(create_material("Yellow", (0.9, 0.8, 0.1), 0.5))
+
+def create_seating_bowl(center_y=-27, tier_name="Lower", inner_r=35, outer_r=55,
+                        start_angle=-135, end_angle=135, base_elevation=2,
+                        rows=15, row_height=0.55, row_depth=0.8, seat_color=(0.15, 0.25, 0.5)):
+    """Create a seating section with visible stepped rows."""
+    seat_mat = create_material(f"Seats_{{tier_name}}", seat_color, 0.6)
+    concrete_mat = create_material("Concrete", (0.5, 0.48, 0.45), 0.9)
+
+    segments = max(24, int(abs(end_angle - start_angle) / 3))
+
+    verts = []
+    faces = []
 
     for row in range(rows + 1):
-        r = inner_radius + row * row_depth
-        z = elevation + row * 0.8  # Each row is 0.8m higher
+        r = inner_r + row * row_depth
+        z = base_elevation + row * row_height
         for seg in range(segments + 1):
-            angle = math.radians(start_angle + (angle_range * seg / segments))
-            x = r * math.cos(angle)
-            y = r * math.sin(angle)
+            angle = math.radians(start_angle + ((end_angle - start_angle) * seg / segments))
+            # Offset from home plate
+            x = r * math.sin(angle)
+            y = center_y - r * math.cos(angle)
             verts.append((x, y, z))
 
-    # Create faces
     for row in range(rows):
         for seg in range(segments):
             v1 = row * (segments + 1) + seg
@@ -171,125 +278,293 @@ def create_seating_section(inner_radius, outer_radius, start_angle, end_angle, e
             v4 = v1 + segments + 1
             faces.append((v1, v2, v3, v4))
 
-    # Create mesh
-    mesh = bpy.data.meshes.new(name)
+    mesh = bpy.data.meshes.new(f"Seating_{{tier_name}}")
     mesh.from_pydata(verts, [], faces)
     mesh.update()
 
-    obj = bpy.data.objects.new(name, mesh)
+    obj = bpy.data.objects.new(f"Seating_{{tier_name}}", mesh)
     bpy.context.collection.objects.link(obj)
+    obj.data.materials.append(seat_mat)
 
     return obj
 
 def create_stadium_seating():
-    """Create the full stadium seating bowl."""
-    seat_material = create_material("Seats_Blue", (0.15, 0.25, 0.45), 0.6)
-    seat_material_green = create_material("Seats_Green", (0.2, 0.4, 0.2), 0.6)
-    concrete = create_material("Concrete", (0.5, 0.48, 0.45), 0.9)
+    """Create the full stadium seating bowl with multiple tiers."""
+    # Lower deck - main seating bowl around the infield
+    create_seating_bowl(
+        tier_name="Lower_Main",
+        inner_r=38, outer_r=58,
+        start_angle=-120, end_angle=120,
+        base_elevation=2, rows=20, row_height=0.5, row_depth=0.85,
+        seat_color=(0.12, 0.22, 0.48)
+    )
 
-    # Lower deck - wraps around from left field to right field
-    # Behind home plate (main view area)
-    for i, (start, end) in enumerate([(-60, -30), (-30, 0), (0, 30), (30, 60)]):
-        section = create_seating_section(42, 58, start - 90, end - 90, 3, rows=12, name=f"Lower_{{i}}")
-        section.data.materials.append(seat_material)
+    # Lower deck - down the lines
+    create_seating_bowl(
+        tier_name="Lower_Left",
+        inner_r=40, outer_r=55,
+        start_angle=120, end_angle=160,
+        base_elevation=1.5, rows=15, row_height=0.5, row_depth=0.85,
+        seat_color=(0.12, 0.22, 0.48)
+    )
+    create_seating_bowl(
+        tier_name="Lower_Right",
+        inner_r=40, outer_r=55,
+        start_angle=-160, end_angle=-120,
+        base_elevation=1.5, rows=15, row_height=0.5, row_depth=0.85,
+        seat_color=(0.12, 0.22, 0.48)
+    )
 
-    # Down the lines
-    for start, end in [(-90, -60), (60, 90)]:
-        section = create_seating_section(42, 55, start - 90, end - 90, 3, rows=10, name=f"Lower_Line")
-        section.data.materials.append(seat_material)
-
-    # Outfield sections
-    for start, end in [(-135, -90), (90, 135)]:
-        section = create_seating_section(85, 98, start - 90, end - 90, 2, rows=8, name=f"Outfield")
-        section.data.materials.append(seat_material_green)
+    # Club level / Mezzanine
+    create_seating_bowl(
+        tier_name="Club",
+        inner_r=60, outer_r=75,
+        start_angle=-100, end_angle=100,
+        base_elevation=14, rows=12, row_height=0.6, row_depth=0.9,
+        seat_color=(0.2, 0.15, 0.35)
+    )
 
     # Upper deck
-    for i, (start, end) in enumerate([(-55, -25), (-25, 5), (5, 35), (35, 65)]):
-        section = create_seating_section(60, 82, start - 90, end - 90, 18, rows=15, name=f"Upper_{{i}}")
-        section.data.materials.append(seat_material)
+    create_seating_bowl(
+        tier_name="Upper_Main",
+        inner_r=65, outer_r=90,
+        start_angle=-95, end_angle=95,
+        base_elevation=26, rows=22, row_height=0.55, row_depth=0.85,
+        seat_color=(0.15, 0.28, 0.52)
+    )
 
-    # Create concourse/structure
-    bpy.ops.mesh.primitive_cylinder_add(radius=40, depth=3, location=(0, -10, 1.5), vertices=64)
-    concourse = bpy.context.active_object
-    concourse.name = "Concourse"
-    concourse.data.materials.append(concrete)
+    # Outfield bleachers (left)
+    create_seating_bowl(
+        tier_name="Bleachers_Left",
+        inner_r=100, outer_r=118,
+        start_angle=135, end_angle=175,
+        base_elevation=1, rows=12, row_height=0.5, row_depth=0.9,
+        seat_color=(0.15, 0.4, 0.18)
+    )
+
+    # Outfield bleachers (right)
+    create_seating_bowl(
+        tier_name="Bleachers_Right",
+        inner_r=100, outer_r=118,
+        start_angle=-175, end_angle=-135,
+        base_elevation=1, rows=12, row_height=0.5, row_depth=0.9,
+        seat_color=(0.15, 0.4, 0.18)
+    )
 
 def create_stadium_structure():
-    """Create stadium structural elements."""
-    concrete = create_material("Concrete", (0.55, 0.52, 0.48), 0.85)
+    """Create stadium structural elements - concourses, facades, ramps."""
+    concrete = create_material("Concrete_Structure", (0.6, 0.58, 0.55), 0.85)
+    facade = create_material("Facade", (0.7, 0.68, 0.65), 0.8)
 
-    # Back wall
-    bpy.ops.mesh.primitive_cylinder_add(radius=105, depth=35, location=(0, 0, 17.5), vertices=64)
-    outer_wall = bpy.context.active_object
+    # Lower concourse (ring behind lower seating)
+    bpy.ops.mesh.primitive_cylinder_add(radius=62, depth=4, location=(0, -27, 7), vertices=64)
+    lower_con = bpy.context.active_object
+    lower_con.name = "Lower_Concourse"
+    lower_con.data.materials.append(concrete)
 
-    bpy.ops.mesh.primitive_cylinder_add(radius=100, depth=40, location=(0, 0, 17.5), vertices=64)
-    inner_cut = bpy.context.active_object
+    # Upper concourse
+    bpy.ops.mesh.primitive_cylinder_add(radius=78, depth=5, location=(0, -27, 22), vertices=64)
+    upper_con = bpy.context.active_object
+    upper_con.name = "Upper_Concourse"
+    upper_con.data.materials.append(concrete)
 
-    bool_mod = outer_wall.modifiers.new(name="Cut", type="BOOLEAN")
+    # Stadium back wall / facade
+    bpy.ops.mesh.primitive_cylinder_add(radius=95, depth=45, location=(0, -27, 22.5), vertices=64)
+    outer = bpy.context.active_object
+    bpy.ops.mesh.primitive_cylinder_add(radius=92, depth=50, location=(0, -27, 22.5), vertices=64)
+    inner = bpy.context.active_object
+
+    bool_mod = outer.modifiers.new(name="Hollow", type="BOOLEAN")
     bool_mod.operation = "DIFFERENCE"
-    bool_mod.object = inner_cut
-    bpy.context.view_layer.objects.active = outer_wall
-    bpy.ops.object.modifier_apply(modifier="Cut")
-    bpy.data.objects.remove(inner_cut)
+    bool_mod.object = inner
+    bpy.context.view_layer.objects.active = outer
+    bpy.ops.object.modifier_apply(modifier="Hollow")
+    bpy.data.objects.remove(inner)
 
-    outer_wall.name = "StadiumWall"
-    outer_wall.data.materials.append(concrete)
+    outer.name = "Stadium_Facade"
+    outer.data.materials.append(facade)
 
-    # Cut out the outfield (open stadium)
-    bpy.ops.mesh.primitive_cube_add(size=150, location=(0, 80, 20))
-    outfield_cut = bpy.context.active_object
-
-    bool_mod = outer_wall.modifiers.new(name="OpenOutfield", type="BOOLEAN")
+    # Cut out the outfield opening
+    bpy.ops.mesh.primitive_cube_add(size=200, location=(0, 70, 25))
+    cut = bpy.context.active_object
+    bool_mod = outer.modifiers.new(name="Outfield_Cut", type="BOOLEAN")
     bool_mod.operation = "DIFFERENCE"
-    bool_mod.object = outfield_cut
-    bpy.context.view_layer.objects.active = outer_wall
-    bpy.ops.object.modifier_apply(modifier="OpenOutfield")
-    bpy.data.objects.remove(outfield_cut)
+    bool_mod.object = cut
+    bpy.context.view_layer.objects.active = outer
+    bpy.ops.object.modifier_apply(modifier="Outfield_Cut")
+    bpy.data.objects.remove(cut)
+
+    # Press box / Luxury suites (behind home plate, upper level)
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, -85, 35))
+    press_box = bpy.context.active_object
+    press_box.scale = (30, 8, 6)
+    press_box.name = "Press_Box"
+    press_box.data.materials.append(create_material("Glass_Dark", (0.1, 0.12, 0.15), 0.1, 0.3))
+
+def create_scoreboard():
+    """Create a basic scoreboard in center field."""
+    # Main board
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 110, 20))
+    board = bpy.context.active_object
+    board.scale = (25, 1, 12)
+    board.name = "Scoreboard"
+    board.data.materials.append(create_material("Scoreboard_Dark", (0.08, 0.08, 0.1), 0.8))
+
+    # Screen (slightly in front)
+    bpy.ops.mesh.primitive_plane_add(size=1, location=(0, 109, 20))
+    screen = bpy.context.active_object
+    screen.scale = (23, 10, 1)
+    screen.rotation_euler = (math.radians(90), 0, 0)
+    screen.name = "Scoreboard_Screen"
+    screen.data.materials.append(create_material("Screen_Green", (0.1, 0.35, 0.15), 0.3, 0.0))
+
+    # Support structure
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 112, 10))
+    support = bpy.context.active_object
+    support.scale = (2, 2, 10)
+    support.name = "Scoreboard_Support"
+    support.data.materials.append(create_material("Steel", (0.4, 0.4, 0.42), 0.4, 0.8))
+
+def create_dugouts():
+    """Create dugouts along the first and third base lines."""
+    dugout_mat = create_material("Dugout", (0.3, 0.28, 0.25), 0.8)
+
+    for x_mult in [-1, 1]:
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(x_mult * 25, -22, 0.5))
+        dugout = bpy.context.active_object
+        dugout.scale = (8, 3, 1.5)
+        dugout.name = f"Dugout_{{'' if x_mult > 0 else '3B'}}"
+        dugout.data.materials.append(dugout_mat)
+
+        # Dugout roof
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(x_mult * 25, -22, 2.2))
+        roof = bpy.context.active_object
+        roof.scale = (9, 4, 0.3)
+        roof.name = f"Dugout_Roof"
+        roof.data.materials.append(create_material("Dugout_Roof", (0.25, 0.25, 0.28), 0.7))
+
+def create_foul_poles():
+    """Create foul poles at the end of each foul line."""
+    pole_mat = create_material("Foul_Pole_Yellow", (0.9, 0.75, 0.1), 0.5, 0.3)
+
+    for angle in [45, 135]:
+        x = 115 * math.cos(math.radians(angle - 90))
+        y = -27 + 115 * math.sin(math.radians(angle - 90))
+        bpy.ops.mesh.primitive_cylinder_add(radius=0.15, depth=25, location=(x, y, 12.5), vertices=12)
+        pole = bpy.context.active_object
+        pole.name = f"Foul_Pole_{{angle}}"
+        pole.data.materials.append(pole_mat)
+
+def create_light_towers():
+    """Create stadium light towers."""
+    steel = create_material("Light_Steel", (0.35, 0.35, 0.38), 0.5, 0.7)
+    light_mat = create_material("Light_Fixture", (0.9, 0.9, 0.85), 0.2)
+
+    # Light tower positions (around the stadium)
+    positions = [
+        (75, -80, "Back_Left"),
+        (-75, -80, "Back_Right"),
+        (85, 20, "Left_Field"),
+        (-85, 20, "Right_Field"),
+    ]
+
+    for x, y, name in positions:
+        # Tower
+        bpy.ops.mesh.primitive_cylinder_add(radius=1.5, depth=50, location=(x, y, 25), vertices=8)
+        tower = bpy.context.active_object
+        tower.name = f"Light_Tower_{{name}}"
+        tower.data.materials.append(steel)
+
+        # Light bank
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, 52))
+        lights = bpy.context.active_object
+        lights.scale = (6, 3, 2)
+        lights.name = f"Light_Bank_{{name}}"
+        lights.data.materials.append(light_mat)
 
 def setup_lighting():
-    """Set up stadium lighting."""
-    # Sun light
-    bpy.ops.object.light_add(type='SUN', location=(50, -50, 80))
+    """Set up realistic stadium lighting."""
+    # Main sun (afternoon game lighting)
+    bpy.ops.object.light_add(type='SUN', location=(100, -100, 150))
     sun = bpy.context.active_object
-    sun.data.energy = 4
-    sun.rotation_euler = (math.radians(45), math.radians(15), math.radians(45))
+    sun.name = "Sun"
+    sun.data.energy = 5
+    sun.data.color = (1.0, 0.95, 0.9)
+    sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(135))
 
-    # Sky
-    world = bpy.data.worlds.new("World")
+    # Fill light (opposite side)
+    bpy.ops.object.light_add(type='SUN', location=(-80, 50, 100))
+    fill = bpy.context.active_object
+    fill.name = "Fill_Light"
+    fill.data.energy = 1.5
+    fill.data.color = (0.9, 0.95, 1.0)
+    fill.rotation_euler = (math.radians(60), math.radians(-20), math.radians(-45))
+
+    # Stadium lights (area lights for even illumination)
+    for x, y in [(0, -90), (70, -50), (-70, -50), (50, 40), (-50, 40)]:
+        bpy.ops.object.light_add(type='AREA', location=(x, y, 60))
+        area = bpy.context.active_object
+        area.data.energy = 8000
+        area.data.size = 15
+        area.data.color = (1.0, 0.98, 0.95)
+        area.rotation_euler = (math.radians(45), 0, 0)
+
+    # Sky environment
+    world = bpy.data.worlds.new("Stadium_World")
     bpy.context.scene.world = world
     world.use_nodes = True
-    bg = world.node_tree.nodes["Background"]
 
-    # Create a sky gradient
-    sky_tex = world.node_tree.nodes.new('ShaderNodeTexGradient')
-    mapping = world.node_tree.nodes.new('ShaderNodeMapping')
-    tex_coord = world.node_tree.nodes.new('ShaderNodeTexCoord')
-    color_ramp = world.node_tree.nodes.new('ShaderNodeValToRGB')
+    nodes = world.node_tree.nodes
+    links = world.node_tree.links
 
-    # Set up gradient from horizon to sky
-    color_ramp.color_ramp.elements[0].color = (0.7, 0.8, 0.95, 1)  # Horizon
-    color_ramp.color_ramp.elements[1].color = (0.3, 0.5, 0.85, 1)   # Sky
+    # Clear default nodes
+    nodes.clear()
 
-    world.node_tree.links.new(tex_coord.outputs['Generated'], mapping.inputs['Vector'])
-    world.node_tree.links.new(mapping.outputs['Vector'], sky_tex.inputs['Vector'])
-    world.node_tree.links.new(sky_tex.outputs['Fac'], color_ramp.inputs['Fac'])
-    world.node_tree.links.new(color_ramp.outputs['Color'], bg.inputs['Color'])
+    # Create sky texture
+    sky = nodes.new('ShaderNodeTexSky')
+    sky.sky_type = 'HOSEK_WILKIE'
+    sky.sun_elevation = math.radians(45)
+    sky.sun_rotation = math.radians(135)
+    sky.turbidity = 2.5
+
+    bg = nodes.new('ShaderNodeBackground')
     bg.inputs['Strength'].default_value = 1.0
+
+    output = nodes.new('ShaderNodeOutputWorld')
+
+    links.new(sky.outputs['Color'], bg.inputs['Color'])
+    links.new(bg.outputs['Background'], output.inputs['Surface'])
 
 # Load the template
 template_path = "/templates/{template_name}"
 try:
     bpy.ops.wm.open_mainfile(filepath=template_path)
+    print(f"Loaded template: {{template_path}}")
 except Exception as e:
     # If template doesn't exist, create procedural stadium
     print(f"Template not found, creating procedural stadium: {{e}}")
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
-    # Build the stadium
+    # Build the complete stadium
+    print("Creating baseball field...")
     create_baseball_field()
+    print("Creating outfield wall...")
+    create_outfield_wall()
+    print("Creating stadium seating...")
     create_stadium_seating()
+    print("Creating stadium structure...")
     create_stadium_structure()
+    print("Creating scoreboard...")
+    create_scoreboard()
+    print("Creating dugouts...")
+    create_dugouts()
+    print("Creating foul poles...")
+    create_foul_poles()
+    print("Creating light towers...")
+    create_light_towers()
+    print("Setting up lighting...")
     setup_lighting()
+    print("Procedural stadium complete!")
 
 # Get or create camera
 if "Camera" not in bpy.data.objects:

@@ -9,9 +9,16 @@ venue:
     width: 1280
     height: 968
 
+  # Field center is at the pitcher's mound (where cameras should look)
   field_center:
     x: 0
     y: 0
+    z: 0
+
+  # Home plate position (reference for seating calculations)
+  home_plate:
+    x: 0
+    y: -27
     z: 0
 
   # Tier elevation and distance mapping (in meters)

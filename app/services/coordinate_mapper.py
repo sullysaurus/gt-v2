@@ -148,18 +148,22 @@ class CoordinateMapper:
 
         angle_rad = math.radians(angle_deg)
 
-        # Calculate distance from field center based on row position
+        # Calculate distance from home plate based on row position
         distance = min_distance + normalized_depth * (max_distance - min_distance)
 
-        # Calculate 3D position (cylindrical to cartesian)
+        # Home plate position (seating is arranged around this point)
+        # For Yankee Stadium, home plate is at (0, -27, 0)
+        home_plate_y = -27
+
+        # Calculate 3D position (cylindrical to cartesian, centered on home plate)
         camera_x = distance * math.sin(angle_rad)
-        camera_y = -distance * math.cos(angle_rad)
+        camera_y = home_plate_y - distance * math.cos(angle_rad)
         camera_z = elevation
 
         # Add slight height variation based on row
         camera_z += normalized_depth * 3
 
-        # Create camera looking at field center
+        # Create camera looking at the field center (pitcher's mound area)
         target = (
             self.venue.field_center.x,
             self.venue.field_center.y,
