@@ -51,6 +51,36 @@ class CoordinateMapper:
                 return section
         return None
 
+    def estimate_position_from_click(
+        self,
+        norm_x: float,
+        norm_y: float
+    ) -> tuple[float, int, float]:
+        """
+        Estimate angle, tier, and depth from click position when no section is found.
+
+        Returns:
+            Tuple of (angle_degrees, estimated_tier, normalized_depth)
+        """
+        # Calculate angle from center of seatmap (assumed to be field center)
+        angle_deg = calculate_angle_from_center(norm_x, norm_y, 0.5, 0.45)
+
+        # Estimate tier based on distance from center
+        # Closer to center = lower tier, further = upper tier
+        dist_from_center = math.sqrt((norm_x - 0.5)**2 + (norm_y - 0.45)**2)
+
+        if dist_from_center < 0.25:
+            tier = 100  # Lower level
+            normalized_depth = dist_from_center / 0.25
+        elif dist_from_center < 0.38:
+            tier = 200  # Mid level
+            normalized_depth = (dist_from_center - 0.25) / 0.13
+        else:
+            tier = 400  # Upper level
+            normalized_depth = min(1.0, (dist_from_center - 0.38) / 0.15)
+
+        return angle_deg, tier, normalized_depth
+
     def map_to_camera_position(
         self,
         click_x: int,
@@ -68,7 +98,7 @@ class CoordinateMapper:
             image_height: Height of seatmap image (uses config if not provided)
 
         Returns:
-            CameraPosition if click is within a section, None otherwise
+            CameraPosition for the clicked location
         """
         # Use configured dimensions if not provided
         width = image_width or self.venue.seatmap.width
@@ -80,49 +110,54 @@ class CoordinateMapper:
 
         # Find the section
         section = self.find_section(norm_x, norm_y)
-        if section is None:
-            return None
 
-        # Get tier elevation and distance info
-        tier = self.venue.get_tier(section.tier)
-        if tier is None:
-            # Default tier values if not found
-            elevation = 10.0
-            min_distance, max_distance = 40, 70
+        if section is not None:
+            # Get tier elevation and distance info
+            tier = self.venue.get_tier(section.tier)
+            if tier is None:
+                elevation = 10.0
+                min_distance, max_distance = 40, 70
+            else:
+                elevation = tier.elevation
+                min_distance, max_distance = tier.distance_range
+
+            # Calculate position within section for row depth
+            _, normalized_depth = distance_to_polygon_edge(norm_x, norm_y, section.polygon)
+
+            # Use the section's configured angle, or calculate from position
+            if section.angle != 0:
+                angle_deg = section.angle
+            else:
+                section_cx, section_cy = polygon_centroid(section.polygon)
+                angle_deg = calculate_angle_from_center(section_cx, section_cy)
         else:
-            elevation = tier.elevation
-            min_distance, max_distance = tier.distance_range
-
-        # Calculate position within section for row depth
-        _, normalized_depth = distance_to_polygon_edge(norm_x, norm_y, section.polygon)
-
-        # Get section center for angle calculation
-        section_cx, section_cy = polygon_centroid(section.polygon)
-
-        # Use the section's configured angle, or calculate from position
-        if section.angle != 0:
-            angle_deg = section.angle
-        else:
-            # Calculate angle from seatmap center
-            angle_deg = calculate_angle_from_center(section_cx, section_cy)
+            # Fallback: estimate position from click location
+            angle_deg, tier_level, normalized_depth = self.estimate_position_from_click(norm_x, norm_y)
+            tier = self.venue.get_tier(tier_level)
+            if tier is None:
+                # Use defaults based on estimated tier
+                tier_defaults = {
+                    100: (5.0, 30, 55),
+                    200: (18.0, 50, 80),
+                    400: (38.0, 70, 100),
+                }
+                elevation, min_distance, max_distance = tier_defaults.get(tier_level, (15.0, 45, 75))
+            else:
+                elevation = tier.elevation
+                min_distance, max_distance = tier.distance_range
 
         angle_rad = math.radians(angle_deg)
 
         # Calculate distance from field center based on row position
-        # Front rows (lower normalized_depth) are closer
         distance = min_distance + normalized_depth * (max_distance - min_distance)
 
         # Calculate 3D position (cylindrical to cartesian)
-        # Note: In our coordinate system:
-        # - X is left/right
-        # - Y is forward/back (toward field)
-        # - Z is up/down
         camera_x = distance * math.sin(angle_rad)
-        camera_y = -distance * math.cos(angle_rad)  # Negative because behind home plate is -Y
+        camera_y = -distance * math.cos(angle_rad)
         camera_z = elevation
 
         # Add slight height variation based on row
-        camera_z += normalized_depth * 3  # Rows further back are slightly higher
+        camera_z += normalized_depth * 3
 
         # Create camera looking at field center
         target = (
