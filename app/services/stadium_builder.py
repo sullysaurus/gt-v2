@@ -8,94 +8,45 @@ from openai import OpenAI
 from app.config import OPENAI_API_KEY
 
 
-STADIUM_EXTRACTION_PROMPT = """Analyze this stadium seatmap image and extract the complete 3D structure needed to build a Blender model.
+STADIUM_EXTRACTION_PROMPT = """Analyze this stadium seatmap image and extract the 3D structure for a Blender model.
 
-Return a JSON object with this EXACT structure:
+Return a JSON object with this structure:
 
 {
   "venue_type": "baseball" | "hockey" | "basketball" | "football" | "soccer" | "concert",
   "stadium_shape": "horseshoe" | "oval" | "rectangle" | "circular",
-
   "field": {
-    "type": "baseball_diamond" | "hockey_rink" | "basketball_court" | "football_field" | "soccer_field" | "stage",
+    "type": "hockey_rink" | "baseball_diamond" | "basketball_court" | "football_field" | "stage",
     "center_x": 0.5,
-    "center_y": 0.45,
-    "rotation_degrees": 0,
-    "note": "center coordinates as 0-1 normalized, rotation if field is angled"
+    "center_y": 0.5
   },
-
   "tiers": [
     {
       "level": 100,
-      "name": "Field Level / Lower Bowl",
-      "elevation_meters": 3,
-      "sections": [
-        {
-          "id": "101",
-          "polygon": [[x1,y1], [x2,y2], [x3,y3], [x4,y4]],
-          "angle_from_home": -60,
-          "rows_estimate": 20,
-          "is_premium": false
-        }
-      ]
-    },
-    {
-      "level": 200,
-      "name": "Club Level / Mezzanine",
-      "elevation_meters": 12,
-      "sections": [...]
-    },
-    {
-      "level": 300,
-      "name": "Upper Deck",
-      "elevation_meters": 25,
-      "sections": [...]
+      "name": "Lower Bowl",
+      "elevation_meters": 5,
+      "inner_radius": 0.15,
+      "outer_radius": 0.35,
+      "start_angle": -180,
+      "end_angle": 180
     }
   ],
-
-  "special_areas": [
-    {
-      "type": "bleachers" | "suites" | "press_box" | "scoreboard" | "bullpen",
-      "polygon": [[x1,y1], [x2,y2], [x3,y3], [x4,y4]],
-      "elevation_meters": 5
-    }
-  ],
-
   "stadium_dimensions": {
-    "outer_radius_estimate": 0.48,
-    "inner_radius_estimate": 0.15,
-    "note": "as fraction of image width, helps scale the 3D model"
+    "outer_radius": 0.48,
+    "inner_radius": 0.12
   }
 }
 
-CRITICAL INSTRUCTIONS:
+INSTRUCTIONS:
+1. Identify the venue type and shape from the image
+2. Locate the field/court center (0-1 normalized, 0,0 = top-left)
+3. For each seating tier visible (100-level, 200-level, 300-level, etc):
+   - Estimate elevation in meters (lower=5m, club=12m, upper=25m, top=40m)
+   - Estimate inner and outer radius as fraction of image (0-1)
+   - Estimate angular coverage (start_angle to end_angle, 0=bottom center)
+4. Provide overall stadium dimensions
 
-1. POLYGONS: Use normalized 0-1 coordinates. (0,0) is top-left, (1,1) is bottom-right.
-   Trace the ACTUAL visible boundary of each section as seen in the image.
-
-2. TIERS: Group sections by their elevation level:
-   - 100-level (or similarly named): Closest to field, lowest elevation
-   - 200-level: Middle tier, club/mezzanine
-   - 300/400-level: Upper decks, highest elevation
-
-3. ANGLES: Calculate angle from home plate/center court:
-   - 0° = directly behind home plate
-   - +90° = first base / right side
-   - -90° = third base / left side
-   - ±180° = center field / opposite end
-
-4. SECTIONS: Identify EVERY numbered section visible. For baseball stadiums,
-   expect 50+ sections per tier. Scan systematically around the stadium.
-
-5. ELEVATION: Estimate realistic heights:
-   - Field level: 2-5 meters above field
-   - Club level: 10-15 meters
-   - Upper deck: 20-35 meters
-   - Top level: 35-50 meters
-
-6. ROWS: Estimate number of rows per section based on its depth in the image.
-
-This data will be used to generate accurate Blender 3D geometry, so precision matters."""
+Keep response concise. Only include tiers that are clearly visible."""
 
 
 class StadiumBuilder:
@@ -228,13 +179,61 @@ class StadiumBuilder:
             content = content[:-3]
         content = content.strip()
 
-        # Try to parse JSON
+        # Try to parse JSON, with repair for truncated responses
         try:
             return json.loads(content)
         except json.JSONDecodeError as e:
+            # Try to repair truncated JSON
+            repaired = self._repair_truncated_json(content)
+            if repaired:
+                try:
+                    return json.loads(repaired)
+                except json.JSONDecodeError:
+                    pass
+
             # Log first 500 chars for debugging
             preview = content[:500] if content else "(empty)"
             raise RuntimeError(f"Failed to parse OpenAI response as JSON: {e}\nResponse preview: {preview}")
+
+    def _repair_truncated_json(self, content: str) -> Optional[str]:
+        """Attempt to repair truncated JSON by closing open brackets."""
+        if not content:
+            return None
+
+        # Count open brackets
+        open_braces = content.count('{') - content.count('}')
+        open_brackets = content.count('[') - content.count(']')
+
+        # If we have unclosed structures, try to close them
+        if open_braces > 0 or open_brackets > 0:
+            # Find the last complete structure
+            # Remove any partial content after the last comma or complete value
+            lines = content.rstrip().split('\n')
+
+            # Remove the last line if it looks truncated
+            while lines:
+                last_line = lines[-1].strip()
+                # Check if last line is incomplete (doesn't end with valid JSON ending)
+                if last_line and not last_line.endswith((',', '{', '[', '}', ']', '"', 'true', 'false', 'null')) and not last_line[-1].isdigit():
+                    lines.pop()
+                else:
+                    break
+
+            content = '\n'.join(lines)
+
+            # Now close all open brackets/braces
+            # First close any open arrays, then objects
+            for _ in range(open_brackets):
+                content += ']'
+            for _ in range(open_braces):
+                content += '}'
+
+            # Clean up any trailing commas before closing brackets
+            content = content.replace(',]', ']').replace(',}', '}')
+
+            return content
+
+        return None
 
     def generate_blender_script(self, stadium_data: dict, venue_name: str = "Stadium") -> str:
         """
@@ -349,63 +348,43 @@ field.data.materials.append(grass_mat)
 home_plate_y = field_center_y - 50
 '''
 
-        # Add seating sections from each tier
+        # Add seating tiers using arc geometry
         script += '''
 
-# === CREATE SEATING SECTIONS ===
-def create_section_geometry(polygon_normalized, elevation, rows, name, material):
-    """Create a seating section from normalized polygon coordinates."""
-    scale = ''' + str(scale) + '''
-
-    # Convert normalized coords to world coords
-    points = []
-    for px, py in polygon_normalized:
-        wx = (px - 0.5) * scale
-        wy = (py - 0.5) * scale
-        points.append((wx, wy))
-
-    if len(points) < 3:
-        return None
-
-    # Create mesh for seating section
+# === CREATE SEATING TIERS ===
+def create_seating_tier(inner_r, outer_r, start_ang, end_ang, elevation, rows, name, material):
+    """Create a seating tier as an arc with stepped rows."""
     verts = []
     faces = []
 
+    segments = 32  # Number of segments around the arc
     row_height = 0.5
-    row_depth = 0.8
 
-    # Create stepped rows
+    # Convert angles to radians
+    start_rad = math.radians(start_ang - 90)  # Offset so 0 = bottom
+    end_rad = math.radians(end_ang - 90)
+
     for row in range(rows):
         z = elevation + row * row_height
-        # Interpolate between inner and outer edge
+        # Interpolate radius from inner to outer
         t = row / max(rows - 1, 1)
+        r = inner_r + (outer_r - inner_r) * t
 
-        for i, (x, y) in enumerate(points):
-            # Offset each row slightly outward
-            cx = sum(p[0] for p in points) / len(points)
-            cy = sum(p[1] for p in points) / len(points)
-            dx = x - cx
-            dy = y - cy
+        for i in range(segments + 1):
+            angle = start_rad + (end_rad - start_rad) * (i / segments)
+            x = r * math.cos(angle) + field_center_x
+            y = r * math.sin(angle) + field_center_y
+            verts.append((x, y, z))
 
-            verts.append((
-                x + dx * t * 0.3,
-                y + dy * t * 0.3,
-                z
-            ))
-
-    # Create faces connecting rows
-    n_points = len(points)
+    # Create faces between rows
+    pts_per_row = segments + 1
     for row in range(rows - 1):
-        for i in range(n_points):
-            v1 = row * n_points + i
-            v2 = row * n_points + (i + 1) % n_points
-            v3 = (row + 1) * n_points + (i + 1) % n_points
-            v4 = (row + 1) * n_points + i
+        for i in range(segments):
+            v1 = row * pts_per_row + i
+            v2 = row * pts_per_row + i + 1
+            v3 = (row + 1) * pts_per_row + i + 1
+            v4 = (row + 1) * pts_per_row + i
             faces.append((v1, v2, v3, v4))
-
-    # Top face
-    top_start = (rows - 1) * n_points
-    faces.append(tuple(range(top_start, top_start + n_points)))
 
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(verts, [], faces)
@@ -414,10 +393,9 @@ def create_section_geometry(polygon_normalized, elevation, rows, name, material)
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.collection.objects.link(obj)
     obj.data.materials.append(material)
-
     return obj
 
-# Seat colors by tier
+# Seat colors by tier level
 tier_materials = {
     100: seat_blue,
     200: seat_red,
@@ -425,29 +403,28 @@ tier_materials = {
     400: seat_blue,
 }
 
+scale = ''' + str(scale) + '''
+
 '''
 
-        # Add each tier's sections
+        # Add each tier
         for tier in tiers:
             level = tier.get("level", 100)
             elevation = tier.get("elevation_meters", 5)
-            sections = tier.get("sections", [])
+            inner_r = tier.get("inner_radius", 0.15) * scale
+            outer_r = tier.get("outer_radius", 0.35) * scale
+            start_ang = tier.get("start_angle", -180)
+            end_ang = tier.get("end_angle", 180)
+            rows = max(5, int((outer_r - inner_r) / 2))  # Estimate rows from depth
+            name = tier.get("name", f"Tier_{level}")
 
             script += f'''
-# === TIER {level}: {tier.get("name", "Unknown")} ===
-'''
-            for section in sections:
-                section_id = section.get("id", "unknown")
-                polygon = section.get("polygon", [])
-                rows = section.get("rows_estimate", 15)
-
-                if len(polygon) >= 3:
-                    script += f'''
-create_section_geometry(
-    {polygon},
-    {elevation},
-    {rows},
-    "Section_{section_id}",
+# === TIER {level}: {name} ===
+create_seating_tier(
+    {inner_r}, {outer_r},
+    {start_ang}, {end_ang},
+    {elevation}, {rows},
+    "{name}",
     tier_materials.get({level}, seat_blue)
 )
 '''
