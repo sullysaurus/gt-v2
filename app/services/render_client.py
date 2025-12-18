@@ -1,13 +1,19 @@
 """Client for calling the Modal render backend."""
 import hashlib
+import os
 from pathlib import Path
 from typing import Optional
 
-import modal
-
 from app.models.camera import CameraPosition
 from app.models.venue import Venue
-from app.config import CACHE_DIR, CACHE_ENABLED, CACHE_POSITION_PRECISION
+from app.config import CACHE_DIR, CACHE_ENABLED, CACHE_POSITION_PRECISION, MODAL_TOKEN_ID, MODAL_TOKEN_SECRET
+
+
+def _configure_modal():
+    """Configure Modal credentials from config."""
+    if MODAL_TOKEN_ID and MODAL_TOKEN_SECRET:
+        os.environ["MODAL_TOKEN_ID"] = MODAL_TOKEN_ID
+        os.environ["MODAL_TOKEN_SECRET"] = MODAL_TOKEN_SECRET
 
 
 class RenderClient:
@@ -77,6 +83,10 @@ class RenderClient:
             cached = self._get_cached(cache_key)
             if cached:
                 return cached
+
+        # Configure Modal credentials and import
+        _configure_modal()
+        import modal
 
         # Import the Modal function
         render_fn = modal.Function.lookup("seat-view-renderer", "render_seat_view")

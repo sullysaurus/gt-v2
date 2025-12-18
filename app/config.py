@@ -1,9 +1,21 @@
 """Application configuration."""
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# Try to get secrets from Streamlit (for Streamlit Cloud)
+def get_secret(key: str, default: str = None) -> str:
+    """Get secret from Streamlit secrets or environment."""
+    try:
+        import streamlit as st
+        return st.secrets.get(key, os.getenv(key, default))
+    except:
+        return os.getenv(key, default)
 
 # Base paths
 BASE_DIR = Path(__file__).parent.parent
@@ -12,8 +24,10 @@ VENUES_DIR = DATA_DIR / "venues"
 TEMPLATES_DIR = DATA_DIR / "templates"
 
 # API Keys
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+OPENAI_API_KEY = get_secret("OPENAI_API_KEY")
+REPLICATE_API_TOKEN = get_secret("REPLICATE_API_TOKEN")
+MODAL_TOKEN_ID = get_secret("MODAL_TOKEN_ID")
+MODAL_TOKEN_SECRET = get_secret("MODAL_TOKEN_SECRET")
 
 # Render settings
 DEFAULT_RENDER_WIDTH = 1920
