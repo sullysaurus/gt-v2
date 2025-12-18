@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.services.coordinate_mapper import CoordinateMapper
 from app.services.render_client import RenderClient
-from app.config import VENUES_DIR, DATA_DIR, OPENAI_API_KEY
+from app.config import VENUES_DIR, DATA_DIR, OPENAI_API_KEY, REPLICATE_API_TOKEN
 
 
 def analyze_seatmap_with_ai(venue_id: str) -> dict:
@@ -258,6 +258,44 @@ venue:
         else:
             st.warning("Set OPENAI_API_KEY to enable AI features")
 
+        st.divider()
+
+        # AI Photo Generation
+        st.subheader("AI Photo Generation")
+        if REPLICATE_API_TOKEN:
+            st.caption("Generate photorealistic views from a reference photo")
+
+            # Reference image upload
+            uploaded_ref = st.file_uploader(
+                "Upload a reference photo of the venue",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="reference_image",
+                help="Upload a real photo taken from any seat. AI will generate views from other seats in the same style."
+            )
+
+            if uploaded_ref:
+                ref_image = Image.open(uploaded_ref)
+                st.image(ref_image, caption="Reference Image", use_container_width=True)
+                st.session_state["reference_image"] = ref_image
+                st.session_state["reference_image_bytes"] = uploaded_ref.getvalue()
+                st.success("Reference image loaded!")
+
+            # Render mode selection
+            render_mode = st.radio(
+                "Render Mode",
+                options=["blender", "ai_photo"],
+                format_func=lambda x: "3D Blender Render" if x == "blender" else "AI Photo Generation",
+                help="Blender: Accurate 3D geometry. AI Photo: Photorealistic but approximate."
+            )
+            st.session_state["render_mode"] = render_mode
+
+            if render_mode == "ai_photo" and "reference_image" not in st.session_state:
+                st.info("Upload a reference photo to enable AI generation")
+
+        else:
+            st.warning("Set REPLICATE_API_TOKEN for AI photo generation")
+            st.session_state["render_mode"] = "blender"
+
     # Main content area
     if venues:
         col1, col2 = st.columns([1, 1])
@@ -361,37 +399,80 @@ venue:
                                 "fov": camera.fov
                             })
 
-                        # Render the view
-                        if st.button("Render View", type="primary"):
-                            with st.spinner("Rendering view... This may take 30-60 seconds."):
-                                try:
-                                    client = RenderClient(mapper.venue)
+                        # Render the view - check which mode
+                        render_mode = st.session_state.get("render_mode", "blender")
 
-                                    # Get custom stadium script if available
-                                    stadium_script = st.session_state.get("stadium_script")
+                        if render_mode == "ai_photo":
+                            # AI Photo Generation mode
+                            if "reference_image" not in st.session_state:
+                                st.warning("Please upload a reference photo in the sidebar first")
+                            elif st.button("Generate AI View", type="primary"):
+                                with st.spinner("Generating AI view... This may take 30-60 seconds."):
+                                    try:
+                                        from app.services.view_generator import ViewGenerator
 
-                                    if quality == "preview":
-                                        image_data = client.render_preview(camera, stadium_script=stadium_script)
-                                    else:
-                                        image_data = client.render_full(camera, stadium_script=stadium_script)
+                                        generator = ViewGenerator()
 
-                                    # Display the rendered image
-                                    rendered_image = Image.open(io.BytesIO(image_data))
-                                    st.image(rendered_image, caption="View from your seat", use_container_width=True)
+                                        # Get venue type from config
+                                        venue_type = mapper.venue.type if hasattr(mapper.venue, 'type') else "baseball"
 
-                                    # Download button
-                                    section_label = section_info['section_id'] if section_info else "estimated"
-                                    st.download_button(
-                                        label="Download Image",
-                                        data=image_data,
-                                        file_name=f"seat_view_{venue_id}_{section_label}.png",
-                                        mime="image/png"
-                                    )
-                                except Exception as e:
-                                    st.error(f"Render failed: {str(e)}")
-                                    import traceback
-                                    st.code(traceback.format_exc())
-                                    st.info("Make sure Modal is deployed and try 'Build 3D Stadium' first")
+                                        # Generate view using reference image
+                                        image_data = generator.generate_view_flux(
+                                            camera=camera,
+                                            reference_image=st.session_state["reference_image"],
+                                            venue_type=venue_type,
+                                            width=1024,
+                                            height=768,
+                                        )
+
+                                        # Display the generated image
+                                        rendered_image = Image.open(io.BytesIO(image_data))
+                                        st.image(rendered_image, caption="AI-generated view from your seat", use_container_width=True)
+
+                                        # Download button
+                                        section_label = section_info['section_id'] if section_info else "estimated"
+                                        st.download_button(
+                                            label="Download Image",
+                                            data=image_data,
+                                            file_name=f"seat_view_{venue_id}_{section_label}_ai.png",
+                                            mime="image/png"
+                                        )
+                                    except Exception as e:
+                                        st.error(f"AI generation failed: {str(e)}")
+                                        import traceback
+                                        st.code(traceback.format_exc())
+                        else:
+                            # Blender 3D Render mode
+                            if st.button("Render View", type="primary"):
+                                with st.spinner("Rendering view... This may take 30-60 seconds."):
+                                    try:
+                                        client = RenderClient(mapper.venue)
+
+                                        # Get custom stadium script if available
+                                        stadium_script = st.session_state.get("stadium_script")
+
+                                        if quality == "preview":
+                                            image_data = client.render_preview(camera, stadium_script=stadium_script)
+                                        else:
+                                            image_data = client.render_full(camera, stadium_script=stadium_script)
+
+                                        # Display the rendered image
+                                        rendered_image = Image.open(io.BytesIO(image_data))
+                                        st.image(rendered_image, caption="View from your seat", use_container_width=True)
+
+                                        # Download button
+                                        section_label = section_info['section_id'] if section_info else "estimated"
+                                        st.download_button(
+                                            label="Download Image",
+                                            data=image_data,
+                                            file_name=f"seat_view_{venue_id}_{section_label}.png",
+                                            mime="image/png"
+                                        )
+                                    except Exception as e:
+                                        st.error(f"Render failed: {str(e)}")
+                                        import traceback
+                                        st.code(traceback.format_exc())
+                                        st.info("Make sure Modal is deployed and try 'Build 3D Stadium' first")
 
                 except FileNotFoundError as e:
                     st.error(f"Venue configuration error: {e}")
@@ -407,11 +488,19 @@ venue:
                 1. **Click** on any seat in the seatmap
                 2. The system identifies the **section and tier**
                 3. It calculates the **3D camera position**
-                4. **Blender renders** the view from that seat
-                5. You see what the **actual view** looks like!
+                4. Choose your render mode and generate the view!
 
-                The rendering uses a 3D model of the venue to create
-                an accurate representation of the view.
+                **Two Rendering Modes:**
+
+                🎮 **3D Blender Render** - Geometrically accurate
+                - Uses AI to build a 3D stadium model from the seatmap
+                - Renders precise views with Blender on GPU
+                - Best for: Accurate geometry, consistent style
+
+                📸 **AI Photo Generation** - Photorealistic
+                - Upload a real photo of the venue as reference
+                - AI generates new views matching that style
+                - Best for: Photorealistic images, real venue look
                 """
                 st.markdown(placeholder_text)
 
