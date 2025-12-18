@@ -1,0 +1,182 @@
+venue:
+  id: "yankee_stadium"
+  name: "Yankee Stadium"
+  type: "baseball"
+  template: "baseball_stadium.blend"
+
+  seatmap:
+    file: "seatmap.png"
+    width: 1280
+    height: 968
+
+  field_center:
+    x: 0
+    y: 0
+    z: 0
+
+  # Tier elevation and distance mapping (in meters)
+  tiers:
+    100:
+      elevation: 5.0
+      distance_range: [30, 55]
+    200:
+      elevation: 18.0
+      distance_range: [50, 80]
+    300:
+      elevation: 28.0
+      distance_range: [60, 85]
+    400:
+      elevation: 38.0
+      distance_range: [70, 100]
+
+  # Section definitions with normalized coordinates (0-1)
+  # Polygons are approximate and should be refined with the setup wizard
+  sections:
+    # ===== Lower Level (100s) - Behind Home Plate =====
+    - id: "118"
+      tier: 100
+      polygon: [[0.46, 0.70], [0.54, 0.70], [0.54, 0.78], [0.46, 0.78]]
+      angle: 0
+
+    - id: "119"
+      tier: 100
+      polygon: [[0.42, 0.68], [0.46, 0.70], [0.46, 0.78], [0.42, 0.76]]
+      angle: -10
+
+    - id: "120"
+      tier: 100
+      polygon: [[0.38, 0.65], [0.42, 0.68], [0.42, 0.76], [0.36, 0.74]]
+      angle: -20
+
+    - id: "117"
+      tier: 100
+      polygon: [[0.54, 0.70], [0.58, 0.68], [0.58, 0.76], [0.54, 0.78]]
+      angle: 10
+
+    - id: "116"
+      tier: 100
+      polygon: [[0.58, 0.68], [0.62, 0.65], [0.64, 0.74], [0.58, 0.76]]
+      angle: 20
+
+    # ===== Lower Level (100s) - First Base Side =====
+    - id: "115"
+      tier: 100
+      polygon: [[0.62, 0.62], [0.68, 0.58], [0.70, 0.66], [0.64, 0.70]]
+      angle: 30
+
+    - id: "114"
+      tier: 100
+      polygon: [[0.68, 0.55], [0.74, 0.50], [0.76, 0.58], [0.70, 0.62]]
+      angle: 45
+
+    - id: "113"
+      tier: 100
+      polygon: [[0.74, 0.48], [0.78, 0.42], [0.80, 0.50], [0.76, 0.54]]
+      angle: 60
+
+    # ===== Lower Level (100s) - Third Base Side =====
+    - id: "121"
+      tier: 100
+      polygon: [[0.32, 0.58], [0.38, 0.62], [0.36, 0.70], [0.30, 0.66]]
+      angle: -30
+
+    - id: "122"
+      tier: 100
+      polygon: [[0.26, 0.50], [0.32, 0.55], [0.30, 0.62], [0.24, 0.58]]
+      angle: -45
+
+    - id: "123"
+      tier: 100
+      polygon: [[0.22, 0.42], [0.26, 0.48], [0.24, 0.54], [0.20, 0.50]]
+      angle: -60
+
+    # ===== Lower Level (100s) - Right Field =====
+    - id: "107"
+      tier: 100
+      polygon: [[0.78, 0.38], [0.82, 0.32], [0.85, 0.38], [0.80, 0.44]]
+      angle: 75
+
+    - id: "106"
+      tier: 100
+      polygon: [[0.82, 0.30], [0.85, 0.24], [0.88, 0.30], [0.85, 0.36]]
+      angle: 90
+
+    - id: "105"
+      tier: 100
+      polygon: [[0.84, 0.22], [0.86, 0.16], [0.90, 0.22], [0.88, 0.28]]
+      angle: 105
+
+    # ===== Lower Level (100s) - Left Field =====
+    - id: "131"
+      tier: 100
+      polygon: [[0.18, 0.32], [0.22, 0.38], [0.20, 0.44], [0.15, 0.38]]
+      angle: -75
+
+    - id: "132"
+      tier: 100
+      polygon: [[0.15, 0.24], [0.18, 0.30], [0.15, 0.36], [0.12, 0.30]]
+      angle: -90
+
+    - id: "133"
+      tier: 100
+      polygon: [[0.14, 0.16], [0.16, 0.22], [0.12, 0.28], [0.10, 0.22]]
+      angle: -105
+
+    # ===== Club Level (200s) - Behind Home Plate =====
+    - id: "218"
+      tier: 200
+      polygon: [[0.44, 0.58], [0.56, 0.58], [0.56, 0.66], [0.44, 0.66]]
+      angle: 0
+
+    - id: "217"
+      tier: 200
+      polygon: [[0.56, 0.56], [0.64, 0.52], [0.66, 0.60], [0.56, 0.64]]
+      angle: 15
+
+    - id: "219"
+      tier: 200
+      polygon: [[0.36, 0.52], [0.44, 0.56], [0.44, 0.64], [0.34, 0.60]]
+      angle: -15
+
+    # ===== Upper Deck (400s) - Behind Home Plate =====
+    - id: "420A"
+      tier: 400
+      polygon: [[0.42, 0.82], [0.50, 0.82], [0.50, 0.90], [0.42, 0.90]]
+      angle: 0
+
+    - id: "420B"
+      tier: 400
+      polygon: [[0.50, 0.82], [0.58, 0.82], [0.58, 0.90], [0.50, 0.90]]
+      angle: 5
+
+    - id: "421"
+      tier: 400
+      polygon: [[0.36, 0.80], [0.42, 0.82], [0.42, 0.90], [0.34, 0.88]]
+      angle: -15
+
+    - id: "419"
+      tier: 400
+      polygon: [[0.58, 0.82], [0.64, 0.80], [0.66, 0.88], [0.58, 0.90]]
+      angle: 15
+
+    # ===== Upper Deck (400s) - First Base Side =====
+    - id: "410"
+      tier: 400
+      polygon: [[0.70, 0.68], [0.76, 0.62], [0.80, 0.70], [0.74, 0.76]]
+      angle: 45
+
+    - id: "409"
+      tier: 400
+      polygon: [[0.76, 0.58], [0.82, 0.50], [0.86, 0.58], [0.80, 0.66]]
+      angle: 60
+
+    # ===== Upper Deck (400s) - Third Base Side =====
+    - id: "429"
+      tier: 400
+      polygon: [[0.24, 0.62], [0.30, 0.68], [0.26, 0.76], [0.20, 0.70]]
+      angle: -45
+
+    - id: "430"
+      tier: 400
+      polygon: [[0.18, 0.50], [0.24, 0.58], [0.20, 0.66], [0.14, 0.58]]
+      angle: -60

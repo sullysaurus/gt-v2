@@ -1,0 +1,156 @@
+venue:
+  id: "lenovo_center"
+  name: "Lenovo Center"
+  type: "hockey"
+  template: "hockey_arena.blend"
+
+  seatmap:
+    file: "seatmap.png"
+    width: 1280
+    height: 968
+
+  field_center:
+    x: 0
+    y: 0
+    z: 0
+
+  # Tier elevation and distance mapping (in meters)
+  tiers:
+    100:
+      elevation: 5.0
+      distance_range: [20, 40]
+    200:
+      elevation: 15.0
+      distance_range: [35, 55]
+    300:
+      elevation: 28.0
+      distance_range: [50, 75]
+
+  # Section definitions with normalized coordinates (0-1)
+  # Hockey arena sections - approximately mapped
+  sections:
+    # ===== Lower Level (100s) - Center Ice (Home Bench Side) =====
+    - id: "111"
+      tier: 100
+      polygon: [[0.28, 0.42], [0.36, 0.42], [0.36, 0.54], [0.28, 0.54]]
+      angle: -90
+
+    - id: "112"
+      tier: 100
+      polygon: [[0.36, 0.42], [0.44, 0.42], [0.44, 0.54], [0.36, 0.54]]
+      angle: -90
+
+    - id: "113"
+      tier: 100
+      polygon: [[0.44, 0.42], [0.52, 0.42], [0.52, 0.54], [0.44, 0.54]]
+      angle: -90
+
+    - id: "114"
+      tier: 100
+      polygon: [[0.52, 0.42], [0.60, 0.42], [0.60, 0.54], [0.52, 0.54]]
+      angle: 90
+
+    # ===== Lower Level (100s) - Center Ice (Visitor Side) =====
+    - id: "103"
+      tier: 100
+      polygon: [[0.28, 0.46], [0.36, 0.46], [0.36, 0.58], [0.28, 0.58]]
+      angle: 90
+
+    - id: "104"
+      tier: 100
+      polygon: [[0.36, 0.46], [0.44, 0.46], [0.44, 0.58], [0.36, 0.58]]
+      angle: 90
+
+    - id: "105"
+      tier: 100
+      polygon: [[0.44, 0.46], [0.52, 0.46], [0.52, 0.58], [0.44, 0.58]]
+      angle: 90
+
+    - id: "106"
+      tier: 100
+      polygon: [[0.52, 0.46], [0.60, 0.46], [0.60, 0.58], [0.52, 0.58]]
+      angle: 90
+
+    # ===== Lower Level (100s) - Goals =====
+    - id: "101"
+      tier: 100
+      polygon: [[0.18, 0.44], [0.28, 0.44], [0.28, 0.56], [0.18, 0.56]]
+      angle: 180
+
+    - id: "119"
+      tier: 100
+      polygon: [[0.60, 0.44], [0.70, 0.44], [0.70, 0.56], [0.60, 0.56]]
+      angle: 0
+
+    # ===== Middle Level (200s) - Center =====
+    - id: "214"
+      tier: 200
+      polygon: [[0.35, 0.32], [0.45, 0.32], [0.45, 0.40], [0.35, 0.40]]
+      angle: -90
+
+    - id: "215"
+      tier: 200
+      polygon: [[0.45, 0.32], [0.55, 0.32], [0.55, 0.40], [0.45, 0.40]]
+      angle: -90
+
+    - id: "204"
+      tier: 200
+      polygon: [[0.35, 0.60], [0.45, 0.60], [0.45, 0.68], [0.35, 0.68]]
+      angle: 90
+
+    - id: "205"
+      tier: 200
+      polygon: [[0.45, 0.60], [0.55, 0.60], [0.55, 0.68], [0.45, 0.68]]
+      angle: 90
+
+    # ===== Upper Level (300s) - Corners =====
+    - id: "322"
+      tier: 300
+      polygon: [[0.20, 0.22], [0.30, 0.22], [0.32, 0.32], [0.22, 0.32]]
+      angle: -135
+
+    - id: "323"
+      tier: 300
+      polygon: [[0.30, 0.20], [0.40, 0.20], [0.42, 0.30], [0.32, 0.30]]
+      angle: -110
+
+    - id: "324"
+      tier: 300
+      polygon: [[0.40, 0.18], [0.50, 0.18], [0.50, 0.28], [0.40, 0.28]]
+      angle: -90
+
+    - id: "325"
+      tier: 300
+      polygon: [[0.50, 0.18], [0.60, 0.18], [0.60, 0.28], [0.50, 0.28]]
+      angle: -90
+
+    - id: "326"
+      tier: 300
+      polygon: [[0.60, 0.20], [0.70, 0.20], [0.68, 0.30], [0.58, 0.30]]
+      angle: -70
+
+    - id: "327"
+      tier: 300
+      polygon: [[0.70, 0.22], [0.80, 0.22], [0.78, 0.32], [0.68, 0.32]]
+      angle: -45
+
+    # ===== Upper Level (300s) - Far Side =====
+    - id: "304"
+      tier: 300
+      polygon: [[0.30, 0.68], [0.40, 0.68], [0.40, 0.78], [0.30, 0.78]]
+      angle: 110
+
+    - id: "305"
+      tier: 300
+      polygon: [[0.40, 0.70], [0.50, 0.70], [0.50, 0.80], [0.40, 0.80]]
+      angle: 90
+
+    - id: "306"
+      tier: 300
+      polygon: [[0.50, 0.70], [0.60, 0.70], [0.60, 0.80], [0.50, 0.80]]
+      angle: 90
+
+    - id: "307"
+      tier: 300
+      polygon: [[0.60, 0.68], [0.70, 0.68], [0.70, 0.78], [0.60, 0.78]]
+      angle: 70
