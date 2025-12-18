@@ -4,13 +4,74 @@ from PIL import Image
 from pathlib import Path
 import io
 import sys
+import yaml
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.services.coordinate_mapper import CoordinateMapper
 from app.services.render_client import RenderClient
-from app.config import VENUES_DIR, DATA_DIR
+from app.config import VENUES_DIR, DATA_DIR, OPENAI_API_KEY
+
+
+def analyze_seatmap_with_ai(venue_id: str) -> dict:
+    """Use OpenAI Vision to analyze the seatmap and detect sections."""
+    from app.services.openai_analyzer import SeatmapAnalyzer
+
+    seatmap_path = VENUES_DIR / venue_id / "seatmap.png"
+    if not seatmap_path.exists():
+        raise FileNotFoundError(f"Seatmap not found: {seatmap_path}")
+
+    analyzer = SeatmapAnalyzer()
+    return analyzer.analyze(seatmap_path)
+
+
+def update_venue_config_with_ai_sections(venue_id: str, analysis: dict) -> int:
+    """Update venue config with AI-detected sections."""
+    config_path = VENUES_DIR / venue_id / "config.yaml"
+
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+
+    # Update sections from AI analysis
+    new_sections = []
+    for section in analysis.get("sections", []):
+        new_sections.append({
+            "id": str(section.get("id", "")),
+            "tier": section.get("tier", 100),
+            "polygon": section.get("approximate_polygon", []),
+            "angle": section.get("angle_from_center", 0),
+        })
+
+    # Merge with existing sections (AI sections take precedence by ID)
+    existing_ids = {s["id"] for s in new_sections}
+    for existing in config["venue"].get("sections", []):
+        if existing["id"] not in existing_ids:
+            new_sections.append(existing)
+
+    config["venue"]["sections"] = new_sections
+
+    # Update tiers if detected
+    if "tiers" in analysis:
+        elevation_map = {"low": 5.0, "medium": 15.0, "high": 28.0, "very_high": 40.0}
+        distance_map = {"low": (25, 50), "medium": (45, 70), "high": (60, 85), "very_high": (75, 100)}
+
+        for tier in analysis["tiers"]:
+            level = tier.get("level", 100)
+            elevation = tier.get("relative_elevation", "low")
+            if level not in config["venue"].get("tiers", {}):
+                if "tiers" not in config["venue"]:
+                    config["venue"]["tiers"] = {}
+                config["venue"]["tiers"][level] = {
+                    "elevation": elevation_map.get(elevation, 10.0),
+                    "distance_range": list(distance_map.get(elevation, (30, 60))),
+                }
+
+    # Save updated config
+    with open(config_path, "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+    return len(new_sections)
 
 
 def get_available_venues() -> list[str]:
@@ -121,6 +182,47 @@ venue:
             format_func=lambda x: "Preview (fast)" if x == "preview" else "Full Quality",
             help="Preview renders faster but at lower resolution"
         )
+
+        st.divider()
+
+        # AI Section Detection
+        st.subheader("AI Section Detection")
+        if OPENAI_API_KEY:
+            st.caption("Use OpenAI Vision to auto-detect sections from the seatmap")
+            if st.button("Analyze Seatmap with AI", type="secondary"):
+                with st.spinner("Analyzing seatmap with OpenAI Vision..."):
+                    try:
+                        analysis = analyze_seatmap_with_ai(venue_id)
+                        st.session_state["ai_analysis"] = analysis
+
+                        # Show results
+                        st.success(f"Detected {len(analysis.get('sections', []))} sections")
+                        st.json({
+                            "venue_type": analysis.get("venue_type"),
+                            "sections_found": len(analysis.get("sections", [])),
+                            "tiers_found": len(analysis.get("tiers", [])),
+                        })
+
+                        # Option to save
+                        if st.button("Save to Config", key="save_ai"):
+                            count = update_venue_config_with_ai_sections(venue_id, analysis)
+                            st.success(f"Saved {count} sections to config!")
+                            st.rerun()
+
+                    except Exception as e:
+                        st.error(f"Analysis failed: {str(e)}")
+
+            # Show save button if we have pending analysis
+            if "ai_analysis" in st.session_state:
+                if st.button("Save AI Sections to Config"):
+                    count = update_venue_config_with_ai_sections(
+                        venue_id, st.session_state["ai_analysis"]
+                    )
+                    st.success(f"Saved {count} sections!")
+                    del st.session_state["ai_analysis"]
+                    st.rerun()
+        else:
+            st.warning("Set OPENAI_API_KEY to enable AI detection")
 
     # Main content area
     if venues:
