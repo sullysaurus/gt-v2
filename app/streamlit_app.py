@@ -276,7 +276,7 @@ venue:
             if uploaded_ref:
                 ref_image = Image.open(uploaded_ref)
                 st.image(ref_image, caption="Reference Image", use_container_width=True)
-                st.session_state["reference_image"] = ref_image
+                # Store bytes only (PIL Images can't be stored in session state)
                 st.session_state["reference_image_bytes"] = uploaded_ref.getvalue()
                 st.success("Reference image loaded!")
 
@@ -289,7 +289,7 @@ venue:
             )
             st.session_state["render_mode"] = render_mode
 
-            if render_mode == "ai_photo" and "reference_image" not in st.session_state:
+            if render_mode == "ai_photo" and "reference_image_bytes" not in st.session_state:
                 st.info("Upload a reference photo to enable AI generation")
 
         else:
@@ -404,7 +404,7 @@ venue:
 
                         if render_mode == "ai_photo":
                             # AI Photo Generation mode
-                            if "reference_image" not in st.session_state:
+                            if "reference_image_bytes" not in st.session_state:
                                 st.warning("Please upload a reference photo in the sidebar first")
                             elif st.button("Generate AI View", type="primary"):
                                 with st.spinner("Generating AI view... This may take 30-60 seconds."):
@@ -416,10 +416,10 @@ venue:
                                         # Get venue type from config
                                         venue_type = mapper.venue.type if hasattr(mapper.venue, 'type') else "baseball"
 
-                                        # Generate view using reference image
+                                        # Generate view using reference image bytes
                                         image_data = generator.generate_view_flux(
                                             camera=camera,
-                                            reference_image=st.session_state["reference_image"],
+                                            reference_image=st.session_state["reference_image_bytes"],
                                             venue_type=venue_type,
                                             width=1024,
                                             height=768,
