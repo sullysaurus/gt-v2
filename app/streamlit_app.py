@@ -142,14 +142,30 @@ venue:
             try:
                 from streamlit_image_coordinates import streamlit_image_coordinates
 
+                # Resize image to fit in container while maintaining aspect ratio
+                max_width = 600
+                orig_width, orig_height = seatmap_image.size
+                if orig_width > max_width:
+                    scale = max_width / orig_width
+                    new_height = int(orig_height * scale)
+                    display_image = seatmap_image.resize((max_width, new_height), Image.Resampling.LANCZOS)
+                else:
+                    display_image = seatmap_image
+                    scale = 1.0
+
                 # Display image and get click coordinates
                 coords = streamlit_image_coordinates(
-                    seatmap_image,
+                    display_image,
                     key=f"seatmap_{venue_id}",
                 )
 
                 if coords is not None:
-                    st.session_state["last_click"] = coords
+                    # Scale coordinates back to original image size
+                    scaled_coords = {
+                        "x": int(coords["x"] / scale) if scale != 1.0 else coords["x"],
+                        "y": int(coords["y"] / scale) if scale != 1.0 else coords["y"],
+                    }
+                    st.session_state["last_click"] = scaled_coords
                     st.session_state["venue_id"] = venue_id
 
             except ImportError:

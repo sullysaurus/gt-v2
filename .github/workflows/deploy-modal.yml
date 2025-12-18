@@ -39,6 +39,6 @@ jobs:
         run: |
           python -c "
           import modal
-          fn = modal.Function.lookup('seat-view-renderer', 'render_seat_view')
+          fn = modal.Function.from_name('seat-view-renderer', 'render_seat_view')
           print('Function deployed successfully:', fn)
           "

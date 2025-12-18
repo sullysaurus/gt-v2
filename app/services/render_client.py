@@ -88,8 +88,8 @@ class RenderClient:
         _configure_modal()
         import modal
 
-        # Import the Modal function
-        render_fn = modal.Function.lookup("seat-view-renderer", "render_seat_view")
+        # Import the Modal function (new API: from_name instead of lookup)
+        render_fn = modal.Function.from_name("seat-view-renderer", "render_seat_view")
 
         # Call the render function
         image_data = render_fn.remote(
