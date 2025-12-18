@@ -133,32 +133,69 @@ class StadiumBuilder:
         if not image_path.exists():
             raise FileNotFoundError(f"Image not found: {image_path}")
 
-        base64_image = self._encode_image(image_path)
+        # Read and encode image
+        with open(image_path, "rb") as f:
+            image_bytes = f.read()
+
+        if len(image_bytes) < 1000:
+            raise RuntimeError(f"Image file too small ({len(image_bytes)} bytes), may be corrupted")
+
+        base64_image = base64.b64encode(image_bytes).decode("utf-8")
         mime_type = self._get_mime_type(image_path)
 
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{base64_image}",
-                                    "detail": "high"
+        # Log image size for debugging
+        print(f"Image size: {len(image_bytes)} bytes, base64 length: {len(base64_image)}")
+
+        # Build the image URL
+        image_url = f"data:{mime_type};base64,{base64_image}"
+
+        # Try latest vision models in order of preference
+        models_to_try = ["gpt-4o", "gpt-4-turbo", "gpt-4o-mini"]
+        last_error = None
+
+        for model in models_to_try:
+            try:
+                print(f"Trying model: {model}")
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": image_url,
+                                        "detail": "high"
+                                    }
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Analyze this stadium seatmap image and return a JSON object. " + STADIUM_EXTRACTION_PROMPT
                                 }
-                            },
-                            {"type": "text", "text": STADIUM_EXTRACTION_PROMPT}
-                        ]
-                    }
-                ],
-                max_tokens=16000,
-                response_format={"type": "json_object"},
-            )
-        except Exception as e:
-            raise RuntimeError(f"OpenAI API call failed: {str(e)}")
+                            ]
+                        }
+                    ],
+                    max_tokens=16000,
+                )
+
+                # Check if the response indicates vision failure
+                content = response.choices[0].message.content if response.choices else ""
+                if "unable to analyze" in content.lower() or "cannot see" in content.lower():
+                    print(f"Model {model} couldn't see the image, trying next...")
+                    last_error = RuntimeError(f"Model {model} could not process the image")
+                    continue
+
+                # Success - break out of loop
+                break
+
+            except Exception as e:
+                print(f"Model {model} failed: {str(e)}")
+                last_error = e
+                continue
+        else:
+            # All models failed
+            raise RuntimeError(f"All vision models failed. Last error: {str(last_error)}")
 
         # Check if we got a valid response
         if not response.choices:
