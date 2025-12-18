@@ -45,7 +45,7 @@ templates_volume = modal.Volume.from_name("venue-templates", create_if_missing=T
 @app.function(
     image=blender_image,
     gpu="L40S",
-    timeout=120,
+    timeout=180,
     volumes={"/templates": templates_volume},
 )
 def render_seat_view(
@@ -61,6 +61,7 @@ def render_seat_view(
     width: int = 1920,
     height: int = 1080,
     samples: int = 64,
+    stadium_script: str = None,  # Custom stadium build script from AI
 ) -> bytes:
     """
     Render a view from a specific camera position in the venue.
@@ -73,6 +74,7 @@ def render_seat_view(
         fov: Field of view in degrees
         width, height: Render resolution
         samples: Number of render samples
+        stadium_script: Optional custom Blender script to build the stadium
 
     Returns:
         PNG image data as bytes
@@ -81,11 +83,19 @@ def render_seat_view(
     import tempfile
     import json
 
+    # Handle custom stadium script
+    has_custom_script = stadium_script is not None and len(stadium_script or "") > 10
+    escaped_stadium_script = (stadium_script or "").replace("\\", "\\\\").replace("'", "\\'").replace('"', '\\"') if has_custom_script else ""
+
     # Create a Python script for Blender to execute
     blender_script = f'''
 import bpy
 import math
 import bmesh
+
+# Custom script flag
+has_custom_script = {has_custom_script}
+stadium_script_content = """{escaped_stadium_script}"""
 
 # Materials cache to avoid recreation
 materials_cache = {{}}
@@ -535,36 +545,43 @@ def setup_lighting():
     links.new(sky.outputs['Color'], bg.inputs['Color'])
     links.new(bg.outputs['Background'], output.inputs['Surface'])
 
-# Load the template
-template_path = "/templates/{template_name}"
-try:
-    bpy.ops.wm.open_mainfile(filepath=template_path)
-    print(f"Loaded template: {{template_path}}")
-except Exception as e:
-    # If template doesn't exist, create procedural stadium
-    print(f"Template not found, creating procedural stadium: {{e}}")
+# Check for custom stadium script
+if has_custom_script and len(stadium_script_content) > 10:
+    print("Using custom AI-generated stadium script...")
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    exec(stadium_script_content)
+    print("Custom stadium built!")
+else:
+    # Load template or create procedural stadium
+    template_path = "/templates/{template_name}"
+    try:
+        bpy.ops.wm.open_mainfile(filepath=template_path)
+        print(f"Loaded template: {{template_path}}")
+    except Exception as e:
+        # If template doesn't exist, create procedural stadium
+        print(f"Template not found, creating procedural stadium: {{e}}")
+        bpy.ops.wm.read_factory_settings(use_empty=True)
 
-    # Build the complete stadium
-    print("Creating baseball field...")
-    create_baseball_field()
-    print("Creating outfield wall...")
-    create_outfield_wall()
-    print("Creating stadium seating...")
-    create_stadium_seating()
-    print("Creating stadium structure...")
-    create_stadium_structure()
-    print("Creating scoreboard...")
-    create_scoreboard()
-    print("Creating dugouts...")
-    create_dugouts()
-    print("Creating foul poles...")
-    create_foul_poles()
-    print("Creating light towers...")
-    create_light_towers()
-    print("Setting up lighting...")
-    setup_lighting()
-    print("Procedural stadium complete!")
+        # Build the complete stadium
+        print("Creating baseball field...")
+        create_baseball_field()
+        print("Creating outfield wall...")
+        create_outfield_wall()
+        print("Creating stadium seating...")
+        create_stadium_seating()
+        print("Creating stadium structure...")
+        create_stadium_structure()
+        print("Creating scoreboard...")
+        create_scoreboard()
+        print("Creating dugouts...")
+        create_dugouts()
+        print("Creating foul poles...")
+        create_foul_poles()
+        print("Creating light towers...")
+        create_light_towers()
+        print("Setting up lighting...")
+        setup_lighting()
+        print("Procedural stadium complete!")
 
 # Get or create camera
 if "Camera" not in bpy.data.objects:

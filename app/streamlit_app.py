@@ -185,44 +185,78 @@ venue:
 
         st.divider()
 
-        # AI Section Detection
-        st.subheader("AI Section Detection")
+        # AI Stadium Builder
+        st.subheader("AI Stadium Builder")
         if OPENAI_API_KEY:
-            st.caption("Use OpenAI Vision to auto-detect sections from the seatmap")
-            if st.button("Analyze Seatmap with AI", type="secondary"):
-                with st.spinner("Analyzing seatmap with OpenAI Vision..."):
+            st.caption("Build a 3D stadium model from the seatmap")
+
+            if st.button("🏗️ Build 3D Stadium from Seatmap", type="primary"):
+                with st.spinner("Analyzing seatmap and building 3D model..."):
                     try:
-                        analysis = analyze_seatmap_with_ai(venue_id)
-                        st.session_state["ai_analysis"] = analysis
+                        from app.services.stadium_builder import StadiumBuilder
 
-                        # Show results
-                        st.success(f"Detected {len(analysis.get('sections', []))} sections")
-                        st.json({
-                            "venue_type": analysis.get("venue_type"),
-                            "sections_found": len(analysis.get("sections", [])),
-                            "tiers_found": len(analysis.get("tiers", [])),
-                        })
+                        builder = StadiumBuilder()
+                        seatmap_path = VENUES_DIR / venue_id / "seatmap.png"
 
-                        # Option to save
-                        if st.button("Save to Config", key="save_ai"):
-                            count = update_venue_config_with_ai_sections(venue_id, analysis)
-                            st.success(f"Saved {count} sections to config!")
-                            st.rerun()
+                        # Step 1: Analyze seatmap
+                        st.info("Step 1/3: Analyzing seatmap structure...")
+                        stadium_data = builder.analyze_seatmap(seatmap_path)
+                        st.session_state["stadium_data"] = stadium_data
+
+                        # Count sections
+                        total_sections = sum(
+                            len(tier.get("sections", []))
+                            for tier in stadium_data.get("tiers", [])
+                        )
+
+                        st.success(f"Detected {total_sections} sections across {len(stadium_data.get('tiers', []))} tiers")
+
+                        # Step 2: Generate Blender script
+                        st.info("Step 2/3: Generating Blender script...")
+                        script = builder.generate_blender_script(stadium_data, venue_id)
+
+                        # Save script
+                        script_path = VENUES_DIR / venue_id / "build_stadium.py"
+                        script_path.write_text(script)
+                        st.session_state["stadium_script"] = script
+
+                        st.success(f"Blender script saved to {script_path}")
+
+                        # Show structure summary
+                        with st.expander("Stadium Structure"):
+                            st.json({
+                                "venue_type": stadium_data.get("venue_type"),
+                                "stadium_shape": stadium_data.get("stadium_shape"),
+                                "tiers": [
+                                    {
+                                        "level": t.get("level"),
+                                        "name": t.get("name"),
+                                        "sections": len(t.get("sections", [])),
+                                        "elevation": t.get("elevation_meters")
+                                    }
+                                    for t in stadium_data.get("tiers", [])
+                                ],
+                                "total_sections": total_sections
+                            })
+
+                        st.info("Step 3/3: Ready to render! Click on the seatmap to test.")
 
                     except Exception as e:
-                        st.error(f"Analysis failed: {str(e)}")
+                        st.error(f"Build failed: {str(e)}")
+                        import traceback
+                        st.code(traceback.format_exc())
 
-            # Show save button if we have pending analysis
-            if "ai_analysis" in st.session_state:
-                if st.button("Save AI Sections to Config"):
-                    count = update_venue_config_with_ai_sections(
-                        venue_id, st.session_state["ai_analysis"]
-                    )
-                    st.success(f"Saved {count} sections!")
-                    del st.session_state["ai_analysis"]
-                    st.rerun()
+            # Show download button if we have a script
+            if "stadium_script" in st.session_state:
+                st.download_button(
+                    "📥 Download Blender Script",
+                    st.session_state["stadium_script"],
+                    file_name=f"{venue_id}_stadium.py",
+                    mime="text/plain"
+                )
+
         else:
-            st.warning("Set OPENAI_API_KEY to enable AI detection")
+            st.warning("Set OPENAI_API_KEY to enable AI features")
 
     # Main content area
     if venues:
@@ -329,14 +363,17 @@ venue:
 
                         # Render the view
                         if st.button("Render View", type="primary"):
-                            with st.spinner("Rendering view... This may take 10-30 seconds."):
+                            with st.spinner("Rendering view... This may take 30-60 seconds."):
                                 try:
                                     client = RenderClient(mapper.venue)
 
+                                    # Get custom stadium script if available
+                                    stadium_script = st.session_state.get("stadium_script")
+
                                     if quality == "preview":
-                                        image_data = client.render_preview(camera)
+                                        image_data = client.render_preview(camera, stadium_script=stadium_script)
                                     else:
-                                        image_data = client.render_full(camera)
+                                        image_data = client.render_full(camera, stadium_script=stadium_script)
 
                                     # Display the rendered image
                                     rendered_image = Image.open(io.BytesIO(image_data))
@@ -352,7 +389,9 @@ venue:
                                     )
                                 except Exception as e:
                                     st.error(f"Render failed: {str(e)}")
-                                    st.info("Make sure Modal is deployed: `modal deploy modal_backend/render_service.py`")
+                                    import traceback
+                                    st.code(traceback.format_exc())
+                                    st.info("Make sure Modal is deployed and try 'Build 3D Stadium' first")
 
                 except FileNotFoundError as e:
                     st.error(f"Venue configuration error: {e}")

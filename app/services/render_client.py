@@ -63,6 +63,7 @@ class RenderClient:
         height: int = 1080,
         samples: int = 64,
         use_cache: bool = True,
+        stadium_script: str = None,
     ) -> bytes:
         """
         Render a view from the given camera position.
@@ -73,6 +74,7 @@ class RenderClient:
             height: Render height in pixels
             samples: Number of render samples (higher = better quality but slower)
             use_cache: Whether to use cached renders
+            stadium_script: Optional custom Blender script to build stadium
 
         Returns:
             PNG image data as bytes
@@ -105,6 +107,7 @@ class RenderClient:
             width=width,
             height=height,
             samples=samples,
+            stadium_script=stadium_script,
         )
 
         # Save to cache
@@ -113,7 +116,7 @@ class RenderClient:
 
         return image_data
 
-    def render_preview(self, camera: CameraPosition) -> bytes:
+    def render_preview(self, camera: CameraPosition, stadium_script: str = None) -> bytes:
         """Render a quick preview (lower quality, faster)."""
         return self.render(
             camera=camera,
@@ -121,9 +124,10 @@ class RenderClient:
             height=540,
             samples=16,
             use_cache=True,
+            stadium_script=stadium_script,
         )
 
-    def render_full(self, camera: CameraPosition) -> bytes:
+    def render_full(self, camera: CameraPosition, stadium_script: str = None) -> bytes:
         """Render a full quality image."""
         return self.render(
             camera=camera,
@@ -131,4 +135,5 @@ class RenderClient:
             height=1080,
             samples=64,
             use_cache=True,
+            stadium_script=stadium_script,
         )
