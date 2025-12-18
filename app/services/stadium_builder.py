@@ -136,37 +136,71 @@ class StadiumBuilder:
         base64_image = self._encode_image(image_path)
         mime_type = self._get_mime_type(image_path)
 
-        response = self.client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert at analyzing stadium seatmaps and extracting 3D structural data. Return only valid JSON, no markdown."
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": STADIUM_EXTRACTION_PROMPT},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{mime_type};base64,{base64_image}",
-                                "detail": "high"
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at analyzing stadium seatmaps and extracting 3D structural data. Return only valid JSON, no markdown."
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": STADIUM_EXTRACTION_PROMPT},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{mime_type};base64,{base64_image}",
+                                    "detail": "high"
+                                }
                             }
-                        }
-                    ]
-                }
-            ],
-            max_tokens=16000,
-        )
+                        ]
+                    }
+                ],
+                max_tokens=16000,
+            )
+        except Exception as e:
+            raise RuntimeError(f"OpenAI API call failed: {str(e)}")
+
+        # Check if we got a valid response
+        if not response.choices:
+            raise RuntimeError("OpenAI returned no choices in response")
 
         content = response.choices[0].message.content
-        # Strip markdown if present
+
+        # Check if content is empty
+        if not content or not content.strip():
+            # Check for refusal or other issues
+            finish_reason = response.choices[0].finish_reason
+            raise RuntimeError(f"OpenAI returned empty content. Finish reason: {finish_reason}")
+
+        # Strip markdown code blocks if present
+        content = content.strip()
         if content.startswith("```"):
             lines = content.split("\n")
-            content = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+            # Remove first line (```json or ```)
+            lines = lines[1:]
+            # Remove last line if it's ```
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            content = "\n".join(lines)
 
-        return json.loads(content)
+        # Also handle case where it might still have ``` at start
+        content = content.strip()
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+
+        # Try to parse JSON
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            # Log first 500 chars for debugging
+            preview = content[:500] if content else "(empty)"
+            raise RuntimeError(f"Failed to parse OpenAI response as JSON: {e}\nResponse preview: {preview}")
 
     def generate_blender_script(self, stadium_data: dict, venue_name: str = "Stadium") -> str:
         """
