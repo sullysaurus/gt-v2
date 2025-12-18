@@ -11,6 +11,7 @@ blender_image = (
     .apt_install(
         "wget",
         "xz-utils",
+        # X11 and graphics libraries for Blender
         "libx11-6",
         "libxi6",
         "libxxf86vm1",
@@ -18,6 +19,14 @@ blender_image = (
         "libxrender1",
         "libgl1-mesa-glx",
         "libxkbcommon0",
+        # Additional required libraries
+        "libsm6",          # Session management (was missing!)
+        "libice6",         # ICE protocol
+        "libxext6",        # X extensions
+        "libxrandr2",      # Display size/rotation
+        "libglu1-mesa",    # OpenGL utilities
+        "libegl1",         # EGL for GPU rendering
+        "libgomp1",        # OpenMP for parallel processing
     )
     .run_commands(
         # Download and install Blender 4.2
