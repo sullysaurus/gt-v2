@@ -585,28 +585,54 @@ camera.data.angle = math.radians({fov})
 # Set as active camera
 bpy.context.scene.camera = camera
 
+# Debug: Print camera info
+print(f"Camera position: {{camera.location}}")
+print(f"Camera rotation (radians): {{camera.rotation_euler}}")
+print(f"Camera rotation (degrees): {{[math.degrees(r) for r in camera.rotation_euler]}}")
+print(f"Camera FOV: {fov} degrees")
+
 # Configure render settings
 scene = bpy.context.scene
-scene.render.engine = "CYCLES"
-scene.cycles.device = "GPU"
-scene.cycles.samples = {samples}
-scene.cycles.use_denoising = True
+
+# Try GPU rendering with Cycles, fall back to Eevee if needed
+try:
+    scene.render.engine = "CYCLES"
+    scene.cycles.samples = {samples}
+    scene.cycles.use_denoising = True
+
+    # Try to enable GPU
+    prefs = bpy.context.preferences.addons["cycles"].preferences
+    prefs.compute_device_type = "CUDA"
+    prefs.get_devices()
+
+    gpu_available = False
+    for device in prefs.devices:
+        if device.type == "CUDA":
+            device.use = True
+            gpu_available = True
+            print(f"Using GPU: {{device.name}}")
+
+    if gpu_available:
+        scene.cycles.device = "GPU"
+        print("Rendering with Cycles GPU")
+    else:
+        scene.cycles.device = "CPU"
+        print("No GPU found, rendering with Cycles CPU")
+
+except Exception as e:
+    print(f"Cycles setup failed: {{e}}, falling back to Eevee")
+    scene.render.engine = "BLENDER_EEVEE_NEXT"
+    scene.eevee.taa_render_samples = 64
 
 scene.render.resolution_x = {width}
 scene.render.resolution_y = {height}
 scene.render.resolution_percentage = 100
 scene.render.image_settings.file_format = "PNG"
 
-# Enable GPU compute
-prefs = bpy.context.preferences.addons["cycles"].preferences
-prefs.compute_device_type = "CUDA"
-prefs.get_devices()
-for device in prefs.devices:
-    device.use = True
-
 # Render
 output_path = "/tmp/render_output.png"
 scene.render.filepath = output_path
+print(f"Starting render at {{scene.render.resolution_x}}x{{scene.render.resolution_y}}...")
 bpy.ops.render.render(write_still=True)
 
 print(f"Render complete: {{output_path}}")

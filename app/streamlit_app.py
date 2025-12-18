@@ -201,55 +201,56 @@ venue:
                     # Load venue and map coordinates
                     mapper = CoordinateMapper.load_venue(venue_id)
 
-                    # Get section info
+                    # Get section info (may be None for undefined areas)
                     section_info = mapper.get_section_info(click_x, click_y)
 
                     if section_info:
                         st.success(f"Section: {section_info['section_id']} (Tier {section_info['tier']})")
-
-                        # Map to camera position
-                        camera = mapper.map_to_camera_position(click_x, click_y)
-
-                        if camera:
-                            # Show camera details in expander
-                            with st.expander("Camera Position Details"):
-                                st.json({
-                                    "position": {"x": round(camera.x, 2), "y": round(camera.y, 2), "z": round(camera.z, 2)},
-                                    "rotation": {
-                                        "x": round(camera.rotation.x, 3),
-                                        "y": round(camera.rotation.y, 3),
-                                        "z": round(camera.rotation.z, 3)
-                                    },
-                                    "fov": camera.fov
-                                })
-
-                            # Render the view
-                            if st.button("Render View", type="primary"):
-                                with st.spinner("Rendering view... This may take 10-30 seconds."):
-                                    try:
-                                        client = RenderClient(mapper.venue)
-
-                                        if quality == "preview":
-                                            image_data = client.render_preview(camera)
-                                        else:
-                                            image_data = client.render_full(camera)
-
-                                        # Display the rendered image
-                                        rendered_image = Image.open(io.BytesIO(image_data))
-                                        st.image(rendered_image, caption="View from your seat", use_container_width=True)
-
-                                        # Download button
-                                        st.download_button(
-                                            label="Download Image",
-                                            data=image_data,
-                                            file_name=f"seat_view_{venue_id}_{section_info['section_id']}.png",
-                                            mime="image/png"
-                                        )
-                                    except Exception as e:
-                                        st.error(f"Render failed: {str(e)}")
-                                        st.info("Make sure Modal is deployed: `modal deploy modal_backend/render_service.py`")
                     else:
-                        st.warning("Click is not within a defined section. Try clicking on a seat area.")
+                        st.info("Position estimated (not in defined section)")
+
+                    # Always map to camera position - has fallback for undefined sections
+                    camera = mapper.map_to_camera_position(click_x, click_y)
+
+                    if camera:
+                        # Show camera details in expander
+                        with st.expander("Camera Position Details"):
+                            st.json({
+                                "position": {"x": round(camera.x, 2), "y": round(camera.y, 2), "z": round(camera.z, 2)},
+                                "rotation": {
+                                    "x": round(camera.rotation.x, 3),
+                                    "y": round(camera.rotation.y, 3),
+                                    "z": round(camera.rotation.z, 3)
+                                },
+                                "fov": camera.fov
+                            })
+
+                        # Render the view
+                        if st.button("Render View", type="primary"):
+                            with st.spinner("Rendering view... This may take 10-30 seconds."):
+                                try:
+                                    client = RenderClient(mapper.venue)
+
+                                    if quality == "preview":
+                                        image_data = client.render_preview(camera)
+                                    else:
+                                        image_data = client.render_full(camera)
+
+                                    # Display the rendered image
+                                    rendered_image = Image.open(io.BytesIO(image_data))
+                                    st.image(rendered_image, caption="View from your seat", use_container_width=True)
+
+                                    # Download button
+                                    section_label = section_info['section_id'] if section_info else "estimated"
+                                    st.download_button(
+                                        label="Download Image",
+                                        data=image_data,
+                                        file_name=f"seat_view_{venue_id}_{section_label}.png",
+                                        mime="image/png"
+                                    )
+                                except Exception as e:
+                                    st.error(f"Render failed: {str(e)}")
+                                    st.info("Make sure Modal is deployed: `modal deploy modal_backend/render_service.py`")
 
                 except FileNotFoundError as e:
                     st.error(f"Venue configuration error: {e}")
