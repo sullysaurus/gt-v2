@@ -107,7 +107,7 @@ class StadiumBuilder:
     def _encode_image(self, image_path: Path) -> str:
         """Encode image to base64."""
         with open(image_path, "rb") as f:
-            return base64.standard_b64encode(f.read()).decode("utf-8")
+            return base64.b64encode(f.read()).decode("utf-8")
 
     def _get_mime_type(self, image_path: Path) -> str:
         """Get MIME type from extension."""
@@ -141,24 +141,21 @@ class StadiumBuilder:
                 model="gpt-4o",
                 messages=[
                     {
-                        "role": "system",
-                        "content": "You are an expert at analyzing stadium seatmaps and extracting 3D structural data. Return only valid JSON, no markdown."
-                    },
-                    {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": STADIUM_EXTRACTION_PROMPT},
                             {
                                 "type": "image_url",
                                 "image_url": {
                                     "url": f"data:{mime_type};base64,{base64_image}",
                                     "detail": "high"
                                 }
-                            }
+                            },
+                            {"type": "text", "text": STADIUM_EXTRACTION_PROMPT}
                         ]
                     }
                 ],
                 max_tokens=16000,
+                response_format={"type": "json_object"},
             )
         except Exception as e:
             raise RuntimeError(f"OpenAI API call failed: {str(e)}")
