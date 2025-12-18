@@ -40,12 +40,19 @@ class ViewGenerator:
             suffix = image.suffix.lower()
         elif isinstance(image, Image.Image):
             buffer = io.BytesIO()
+            # Convert to RGB if necessary (handles RGBA, P mode, etc.)
+            if image.mode in ('RGBA', 'P', 'LA'):
+                image = image.convert('RGB')
             image.save(buffer, format="PNG")
-            image_bytes = buffer.getvalue()
+            buffer.seek(0)
+            image_bytes = buffer.read()
             suffix = ".png"
         else:
             image_bytes = image
             suffix = ".png"
+
+        if image_bytes is None:
+            raise ValueError("Failed to convert image to bytes")
 
         mime_type = {
             ".png": "image/png",
@@ -54,7 +61,7 @@ class ViewGenerator:
             ".webp": "image/webp",
         }.get(suffix, "image/png")
 
-        b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+        b64 = base64.b64encode(image_bytes).decode("utf-8")
         return f"data:{mime_type};base64,{b64}"
 
     def set_reference_image(
